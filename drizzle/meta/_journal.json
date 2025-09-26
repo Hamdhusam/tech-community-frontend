@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1758774984250,
+      "tag": "0000_material_black_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1758783814398,
+      "tag": "0001_orange_christian_walker",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1758784185741,
+      "tag": "0002_overconfident_dreaming_celestial",
+      "breakpoints": true
+    }
+  ]
+}
