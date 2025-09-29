@@ -4,7 +4,8 @@ import TechShell from "@/components/TechShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
@@ -12,27 +13,23 @@ import { toast } from "sonner";
 import { AlertCircle, Clock, LogIn } from "lucide-react";
 import Link from "next/link";
 
-const VOTE_OPTIONS = [
-  { value: "yes", label: "Yes" },
-  { value: "no", label: "No" },
-  { value: "abstain", label: "Abstain" },
-];
-
-type VoteStatus = {
-  hasVoted: boolean;
-  vote: string | null;
+type SubmissionStatus = {
+  hasSubmitted: boolean;
   message: string;
 };
 
 export default function DashboardPage() {
   const { data: session, isPending: sessionPending } = useSession();
   const router = useRouter();
-  const [choice, setChoice] = useState<string>("");
+  const [attendanceClass, setAttendanceClass] = useState<string>("");
+  const [fileAcademics, setFileAcademics] = useState<string>("");
+  const [qdOfficial, setQdOfficial] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [voteStatus, setVoteStatus] = useState<VoteStatus | null>(null);
+  const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [strikes, setStrikes] = useState<number>(0);
+  const [submissionsCount, setSubmissionsCount] = useState<number>(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Deadline: 10:00 PM (22:00) today
@@ -46,51 +43,64 @@ export default function DashboardPage() {
     if (sessionPending) return;
 
     setIsAuthenticated(!!session?.user);
+    setStrikes(session?.user?.strikes || 0);
 
     if (session?.user) {
-      // Load strikes from local or API if needed
-      const raw = localStorage.getItem("flexie_state");
-      if (raw) {
-        const data = JSON.parse(raw);
-        setStrikes(data.strikes || 0);
-      }
-
-      fetchVoteStatus();
+      fetchSubmissionStatus();
+      fetchSubmissionsCount();
     } else {
       // For unauth: set status to prompt sign-in, no API call
-      setVoteStatus({ hasVoted: false, vote: null, message: "Sign in to vote" });
+      setSubmissionStatus({ hasSubmitted: false, message: "Sign in to submit" });
       setLoading(false);
     }
   }, [sessionPending, session, router]);
 
-  const fetchVoteStatus = async () => {
+  const fetchSubmissionStatus = async () => {
     if (!session?.user) return;
 
     try {
       setLoading(true);
       setError(null);
       const token = localStorage.getItem("bearer_token");
-      const res = await fetch("/api/votes/has-voted-today", {
+      const res = await fetch("/api/submissions/has-submitted-today", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!res.ok) {
         if (res.status === 401) {
-          toast.error("Please sign in to vote.");
-          setVoteStatus({ hasVoted: false, vote: null, message: "Session expired. Please sign in again." });
+          toast.error("Please sign in to submit.");
+          setSubmissionStatus({ hasSubmitted: false, message: "Session expired. Please sign in again." });
           return;
         }
-        throw new Error("Failed to check vote status");
+        throw new Error("Failed to check submission status");
       }
 
       const data = await res.json();
-      setVoteStatus(data);
+      setSubmissionStatus(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
-      toast.error("Error checking vote status");
-      setVoteStatus({ hasVoted: false, vote: null, message: "Error checking status. Please try again." });
+      toast.error("Error checking submission status");
+      setSubmissionStatus({ hasSubmitted: false, message: "Error checking status. Please try again." });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSubmissionsCount = async () => {
+    if (!session?.user) return;
+
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const res = await fetch("/api/submissions", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSubmissionsCount(data.length);
+      }
+    } catch (err) {
+      console.error("Error fetching submissions count");
     }
   };
 
@@ -98,25 +108,20 @@ export default function DashboardPage() {
     router.push("/sign-in?redirect=/dashboard");
   };
 
-  const submitVote = async () => {
+  const submitSubmission = async () => {
     if (!isAuthenticated) {
-      toast.error("Please sign in to vote.");
+      toast.error("Please sign in to submit.");
       handleSignIn();
       return;
     }
 
-    if (!choice) {
-      toast.error("Please select a vote option");
-      return;
-    }
-
     if (isPastDeadline) {
-      toast.error("Voting closed for today, come back tomorrow");
+      toast.error("Submissions closed for today, come back tomorrow");
       return;
     }
 
-    if (voteStatus?.hasVoted) {
-      toast.error("You have already voted today");
+    if (submissionStatus?.hasSubmitted) {
+      toast.error("You have already submitted today");
       return;
     }
 
@@ -124,31 +129,40 @@ export default function DashboardPage() {
       setSubmitting(true);
       setError(null);
       const token = localStorage.getItem("bearer_token");
-      const res = await fetch("/api/votes", {
+      const submissionData = {
+        attendanceClass: attendanceClass.trim() || null,
+        fileAcademics: fileAcademics.trim() || null,
+        qdOfficial: qdOfficial.trim() || null,
+      };
+
+      const res = await fetch("/api/submissions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ vote: choice }),
+        body: JSON.stringify(submissionData),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        if (data.code === "DUPLICATE_VOTE") {
-          toast.error("You have already voted today");
+        if (data.code === "DUPLICATE_SUBMISSION") {
+          toast.error("You have already submitted today");
         } else {
-          toast.error(data.error || "Failed to submit vote");
+          toast.error(data.error || "Failed to submit");
         }
         return;
       }
 
-      toast.success("Vote submitted successfully!");
-      setChoice("");
-      fetchVoteStatus(); // Refresh status
+      toast.success("Submission successful!");
+      setAttendanceClass("");
+      setFileAcademics("");
+      setQdOfficial("");
+      fetchSubmissionStatus(); // Refresh status
+      fetchSubmissionsCount(); // Refresh count
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
-      toast.error("Error submitting vote");
+      toast.error("Error submitting");
     } finally {
       setSubmitting(false);
     }
@@ -157,10 +171,10 @@ export default function DashboardPage() {
   const getStatusMessage = () => {
     if (loading) return "Loading...";
     if (error) return `Error: ${error}`;
-    if (!isAuthenticated) return "Sign in to vote";
-    if (voteStatus?.hasVoted) return "You have already voted today";
-    if (isPastDeadline) return "Voting closed for today, come back tomorrow";
-    return "Ready to vote";
+    if (!isAuthenticated) return "Sign in to submit";
+    if (submissionStatus?.hasSubmitted) return "Already submitted today";
+    if (isPastDeadline) return "Submissions closed for today, come back tomorrow";
+    return "Ready to submit";
   };
 
   if (sessionPending) {
@@ -173,15 +187,16 @@ export default function DashboardPage() {
     );
   }
 
-  const isLocked = !isAuthenticated || voteStatus?.hasVoted || isPastDeadline;
+  const isLocked = !isAuthenticated || submissionStatus?.hasSubmitted || isPastDeadline;
+  const hasAnyContent = attendanceClass.trim() || fileAcademics.trim() || qdOfficial.trim();
 
   return (
     <TechShell>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Daily Voting</h1>
-            <p className="text-muted-foreground">Submit your vote before {deadlineText}</p>
+            <h1 className="text-2xl font-bold">Daily Submission</h1>
+            <p className="text-muted-foreground">Submit before {deadlineText}</p>
           </div>
           <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
             isPastDeadline ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
@@ -193,40 +208,57 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Vote Now</CardTitle>
+            <CardTitle>Submit Daily Report</CardTitle>
             <CardDescription>{getStatusMessage()}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="text-muted-foreground">Checking vote status...</div>
+                <div className="text-muted-foreground">Checking submission status...</div>
               </div>
             ) : error ? (
               <div className="flex items-center gap-2 text-destructive">
                 <AlertCircle className="h-4 w-4" />
                 {error}
-                <Button variant="outline" size="sm" onClick={fetchVoteStatus}>
+                <Button variant="outline" size="sm" onClick={fetchSubmissionStatus}>
                   Retry
                 </Button>
               </div>
             ) : (
               <>
                 <div className="grid gap-3">
-                  <Label>Vote Option</Label>
-                  <RadioGroup value={choice} onValueChange={setChoice} disabled={isLocked} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {VOTE_OPTIONS.map((option) => (
-                      <label key={option.value} className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer ${
-                        isLocked 
-                          ? 'opacity-50 cursor-not-allowed' 
-                          : choice === option.value 
-                            ? "bg-foreground/10 border-foreground/30"
-                            : "hover:bg-foreground/5"
-                      }`}>
-                        <RadioGroupItem value={option.value} id={option.value} disabled={isLocked} />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </RadioGroup>
+                  <Label htmlFor="attendanceClass">Attendance Class</Label>
+                  <Input
+                    id="attendanceClass"
+                    placeholder="e.g., Present - Class attended"
+                    value={attendanceClass}
+                    onChange={(e) => setAttendanceClass(e.target.value)}
+                    disabled={isLocked}
+                  />
+                </div>
+
+                <div className="grid gap-3">
+                  <Label htmlFor="fileAcademics">File Academics</Label>
+                  <Textarea
+                    id="fileAcademics"
+                    placeholder="e.g., Completed assignments, notes taken"
+                    value={fileAcademics}
+                    onChange={(e) => setFileAcademics(e.target.value)}
+                    disabled={isLocked}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid gap-3">
+                  <Label htmlFor="qdOfficial">QD Official</Label>
+                  <Textarea
+                    id="qdOfficial"
+                    placeholder="e.g., QD tasks completed, official updates"
+                    value={qdOfficial}
+                    onChange={(e) => setQdOfficial(e.target.value)}
+                    disabled={isLocked}
+                    rows={3}
+                  />
                 </div>
 
                 <Separator />
@@ -234,21 +266,21 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <Label>Deadline: {deadlineText}</Label>
-                    <p className="text-xs text-muted-foreground">Votes lock at 10:00 PM daily</p>
+                    <p className="text-xs text-muted-foreground">Submissions lock at 10:00 PM daily</p>
                   </div>
                 </div>
 
                 <Button 
-                  onClick={isAuthenticated ? submitVote : handleSignIn} 
-                  disabled={submitting || (!isAuthenticated && !choice) || (isAuthenticated && (!choice || voteStatus?.hasVoted || isPastDeadline)) || loading}
+                  onClick={isAuthenticated ? submitSubmission : handleSignIn} 
+                  disabled={submitting || (!isAuthenticated && !hasAnyContent) || (isAuthenticated && (!hasAnyContent || submissionStatus?.hasSubmitted || isPastDeadline)) || loading}
                   className="w-full"
                 >
                   {isAuthenticated ? (
-                    submitting ? "Submitting..." : voteStatus?.hasVoted ? "Already Voted" : isPastDeadline ? "Voting Closed" : "Submit Vote"
+                    submitting ? "Submitting..." : submissionStatus?.hasSubmitted ? "Already Submitted" : isPastDeadline ? "Submissions Closed" : "Submit Report"
                   ) : (
                     <>
                       <LogIn className="h-4 w-4 mr-2" />
-                      Sign In to Vote
+                      Sign In to Submit
                     </>
                   )}
                 </Button>
@@ -260,12 +292,18 @@ export default function DashboardPage() {
         {isAuthenticated && (
           <Card>
             <CardHeader>
-              <CardTitle>Strikes</CardTitle>
-              <CardDescription>Track your compliance history</CardDescription>
+              <CardTitle>Compliance Stats</CardTitle>
+              <CardDescription>Track your participation</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="text-5xl font-bold tracking-tight">{strikes}</div>
-              <p className="text-xs text-muted-foreground mt-2">Monitor your daily voting participation</p>
+            <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-2 lg:grid-cols-2">
+              <div className="text-center">
+                <div className="text-3xl font-bold">{strikes}</div>
+                <p className="text-xs text-muted-foreground mt-1">Strikes</p>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold">{submissionsCount}</div>
+                <p className="text-xs text-muted-foreground mt-1">Submissions</p>
+              </div>
             </CardContent>
           </Card>
         )}

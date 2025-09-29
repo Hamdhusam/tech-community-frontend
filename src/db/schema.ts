@@ -88,3 +88,15 @@ export const votes = sqliteTable('votes', {
 }, (table) => ({
   userDateUnique: unique('user_date_unique').on(table.userId, table.voteDate),
 }));
+
+export const submissions = sqliteTable('submissions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  date: text('date').notNull().$defaultFn(() => new Date().toISOString().split('T')[0]), // YYYY-MM-DD format
+  attendanceClass: text('attendance_class'),
+  fileAcademics: text('file_academics'),
+  qdOfficial: text('qd_official'),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => ({
+  submissionUserDateUnique: unique('submission_user_date_unique').on(table.userId, table.date),
+}));
