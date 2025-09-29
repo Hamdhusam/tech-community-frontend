@@ -63,6 +63,41 @@ export default function AdminSignInPage() {
     toast.info("Google OAuth is not configured for admin access yet.");
   };
 
+  const handleQuickAdmin = async () => {
+    try {
+      setLoading(true);
+      toast.info("Preparing admin account...");
+      const res = await fetch("/api/fix-admin-credential", { cache: "no-store" });
+      if (!res.ok) {
+        toast.error("Failed to prepare admin account");
+        return;
+      }
+      const adminEmail = "archanaarchu200604@gmail.com";
+      const adminPassword = "archanaarchu2006";
+      setEmail(adminEmail);
+      setPassword(adminPassword);
+
+      const { data, error } = await authClient.signIn.email({
+        email: adminEmail,
+        password: adminPassword,
+        rememberMe: true,
+        callbackURL: "/admin",
+      });
+      if (error?.code) {
+        toast.error("Admin sign-in failed. Try manually with prefilled credentials.");
+        return;
+      }
+      if (data?.session?.token) {
+        localStorage.setItem("bearer_token", data.session.token);
+      }
+      window.location.href = "/admin";
+    } catch (_) {
+      toast.error("Quick admin setup failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <TechShell>
       <div className="mx-auto max-w-md">
@@ -118,6 +153,9 @@ export default function AdminSignInPage() {
             <Separator className="my-4" />
             <Button variant="outline" className="w-full" onClick={handleGoogle}>
               <Shield className="size-4 mr-2" /> Continue with Google (Admin)
+            </Button>
+            <Button variant="ghost" className="w-full mt-2 text-xs" onClick={handleQuickAdmin} disabled={loading}>
+              <Shield className="size-4 mr-2" /> Quick create & sign in as Admin (dev)
             </Button>
           </CardContent>
         </Card>
