@@ -18,12 +18,12 @@ export async function GET(request: NextRequest) {
     // Get today's date in YYYY-MM-DD format
     const today = new Date().toISOString().split('T')[0];
 
-    // Check if user has already submitted for today
+    // Check if user has already submitted for today using submission_date
     const existingSubmission = await db.select()
       .from(submissions)
       .where(and(
         eq(submissions.userId, session.user.id),
-        eq(submissions.date, today)
+        eq(submissions.submissionDate, today)
       ))
       .limit(1);
 

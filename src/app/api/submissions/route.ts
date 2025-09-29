@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { submissions } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 
-// GET method - List submissions (for testing)
+// GET method - List user's own submissions
 export async function GET(request: NextRequest) {
   try {
     // Authentication check
@@ -20,10 +20,11 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 100);
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Get submissions for the authenticated user
+    // Get submissions for the authenticated user only, ordered by submission_date DESC
     const userSubmissions = await db.select()
       .from(submissions)
       .where(eq(submissions.userId, session.user.id))
+      .orderBy(desc(submissions.submissionDate))
       .limit(limit)
       .offset(offset);
 
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
 
     // Extract and validate fields
     const { 
+      submissionDate = new Date().toISOString().split('T')[0], // Default to today in YYYY-MM-DD format
       date = new Date().toISOString().split('T')[0], // Default to today in YYYY-MM-DD format
       attendanceClass,
       fileAcademics,
@@ -70,25 +72,28 @@ export async function POST(request: NextRequest) {
 
     // Validate date format (YYYY-MM-DD)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
+    if (!dateRegex.test(submissionDate)) {
       return NextResponse.json({ 
-        error: "Date must be in YYYY-MM-DD format",
+        error: "Submission date must be in YYYY-MM-DD format",
         code: "INVALID_DATE_FORMAT" 
       }, { status: 400 });
     }
 
-    // Check for existing submission for user + date combination
+    // Get today's date for duplicate check
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check for existing submission for user + today's date combination
     const existingSubmission = await db.select()
       .from(submissions)
       .where(and(
         eq(submissions.userId, session.user.id),
-        eq(submissions.date, date)
+        eq(submissions.submissionDate, today)
       ))
       .limit(1);
 
     if (existingSubmission.length > 0) {
       return NextResponse.json({ 
-        error: `You have already submitted for ${date}`,
+        error: "You have already submitted today",
         code: "DUPLICATE_SUBMISSION" 
       }, { status: 409 });
     }
@@ -97,11 +102,13 @@ export async function POST(request: NextRequest) {
     const newSubmission = await db.insert(submissions)
       .values({
         userId: session.user.id,
+        submissionDate: today, // Always use today's date for new submissions
         date: date,
         attendanceClass: attendanceClass || null,
         fileAcademics: fileAcademics || null,
         qdOfficial: qdOfficial || null,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       })
       .returning();
 
