@@ -68,7 +68,20 @@ export default function AdminSignInPage() {
       setLoading(true);
       toast.info("Preparing admin account...");
       const res = await fetch("/api/fix-admin-credential", { cache: "no-store" });
-      if (!res.ok) {
+      // Handle JSON success response (ok: true) or HTTP ok
+      let isSuccess = res.ok;
+      try {
+        const data = await res.json();
+        if (data?.ok) {
+          isSuccess = true;
+        } else if (data?.error) {
+          toast.error(`Failed to prepare admin account: ${data.error}`);
+          return;
+        }
+      } catch (_) {
+        // no JSON body (e.g., empty) – rely on HTTP status
+      }
+      if (!isSuccess) {
         toast.error("Failed to prepare admin account");
         return;
       }

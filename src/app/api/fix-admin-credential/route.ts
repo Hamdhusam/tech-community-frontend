@@ -88,10 +88,11 @@ export async function GET(request: NextRequest) {
     });
 
     console.log('Admin credential fix completed successfully!');
-    return NextResponse.redirect(new URL('/admin/sign-in?fixed=true', request.url));
+    // Return JSON success instead of redirect so client fetch can handle it reliably
+    return NextResponse.json({ ok: true, userId });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Admin credential fix failed:', error);
-    return NextResponse.json({ error: 'Fix failed', details: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Fix failed', details: error?.message ?? 'Unknown error' }, { status: 500 });
   }
 }
