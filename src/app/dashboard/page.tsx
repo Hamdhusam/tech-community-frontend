@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useCountdown } from "@/lib/hooks/useCountdown";
 import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertCircle, Clock } from "lucide-react";
 
@@ -26,6 +27,7 @@ type VoteStatus = {
 
 export default function DashboardPage() {
   const { data: session, isPending: sessionPending } = useSession();
+  const router = useRouter();
   const [choice, setChoice] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -45,7 +47,7 @@ export default function DashboardPage() {
     if (sessionPending) return;
 
     if (!session?.user) {
-      setLoading(false);
+      router.push("/sign-in?redirect=/dashboard");
       return;
     }
 
@@ -57,7 +59,7 @@ export default function DashboardPage() {
     }
 
     fetchVoteStatus();
-  }, [sessionPending, session]);
+  }, [sessionPending, session, router]);
 
   const fetchVoteStatus = async () => {
     if (!session?.user) return;
