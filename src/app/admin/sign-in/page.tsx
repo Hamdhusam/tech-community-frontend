@@ -114,7 +114,7 @@ export default function AdminSignInPage() {
   return (
     <TechShell>
       <div className="mx-auto max-w-md">
-        <Card className="border-[oklch(1_0_0_/10%)] bg-[oklch(0.2_0_0)]/60 backdrop-blur">
+        <Card className="border-border/50 backdrop-blur">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Shield className="size-5 text-[oklch(0.696_0.17_240)]"/> Admin Sign In</CardTitle>
             <CardDescription>Access the admin panel</CardDescription>
