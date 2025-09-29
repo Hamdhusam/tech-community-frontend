@@ -52,6 +52,8 @@ export default function DashboardPage() {
       // For unauth: set status to prompt sign-in, no API call
       setSubmissionStatus({ hasSubmitted: false, message: "Sign in to submit" });
       setLoading(false);
+      setStrikes(0);
+      setSubmissionsCount(0);
     }
   }, [sessionPending, session, router]);
 
@@ -206,93 +208,93 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Submit Daily Report</CardTitle>
-            <CardDescription>{getStatusMessage()}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-muted-foreground">Checking submission status...</div>
-              </div>
-            ) : error ? (
-              <div className="flex items-center gap-2 text-destructive">
-                <AlertCircle className="h-4 w-4" />
-                {error}
-                <Button variant="outline" size="sm" onClick={fetchSubmissionStatus}>
-                  Retry
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="grid gap-3">
-                  <Label htmlFor="attendanceClass">Attendance Class</Label>
-                  <Input
-                    id="attendanceClass"
-                    placeholder="e.g., Present - Class attended"
-                    value={attendanceClass}
-                    onChange={(e) => setAttendanceClass(e.target.value)}
-                    disabled={isLocked}
-                  />
-                </div>
-
-                <div className="grid gap-3">
-                  <Label htmlFor="fileAcademics">File Academics</Label>
-                  <Textarea
-                    id="fileAcademics"
-                    placeholder="e.g., Completed assignments, notes taken"
-                    value={fileAcademics}
-                    onChange={(e) => setFileAcademics(e.target.value)}
-                    disabled={isLocked}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="grid gap-3">
-                  <Label htmlFor="qdOfficial">QD Official</Label>
-                  <Textarea
-                    id="qdOfficial"
-                    placeholder="e.g., QD tasks completed, official updates"
-                    value={qdOfficial}
-                    onChange={(e) => setQdOfficial(e.target.value)}
-                    disabled={isLocked}
-                    rows={3}
-                  />
-                </div>
-
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Deadline: {deadlineText}</Label>
-                    <p className="text-xs text-muted-foreground">Submissions lock at 10:00 PM daily</p>
-                  </div>
-                </div>
-
-                <Button 
-                  onClick={isAuthenticated ? submitSubmission : handleSignIn} 
-                  disabled={submitting || (!isAuthenticated && !hasAnyContent) || (isAuthenticated && (!hasAnyContent || submissionStatus?.hasSubmitted || isPastDeadline)) || loading}
-                  className="w-full"
-                >
-                  {isAuthenticated ? (
-                    submitting ? "Submitting..." : submissionStatus?.hasSubmitted ? "Already Submitted" : isPastDeadline ? "Submissions Closed" : "Submit Report"
-                  ) : (
-                    <>
-                      <LogIn className="h-4 w-4 mr-2" />
-                      Sign In to Submit
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {isAuthenticated && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Compliance Stats</CardTitle>
+              <CardTitle>Submit Daily Report</CardTitle>
+              <CardDescription>{getStatusMessage()}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-muted-foreground">Checking submission status...</div>
+                </div>
+              ) : error ? (
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  {error}
+                  <Button variant="outline" size="sm" onClick={fetchSubmissionStatus}>
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3">
+                    <Label htmlFor="attendanceClass">Attendance Class</Label>
+                    <Input
+                      id="attendanceClass"
+                      placeholder="e.g., Present - Class attended"
+                      value={attendanceClass}
+                      onChange={(e) => setAttendanceClass(e.target.value)}
+                      disabled={isLocked}
+                    />
+                  </div>
+
+                  <div className="grid gap-3">
+                    <Label htmlFor="fileAcademics">File Academics</Label>
+                    <Textarea
+                      id="fileAcademics"
+                      placeholder="e.g., Completed assignments, notes taken"
+                      value={fileAcademics}
+                      onChange={(e) => setFileAcademics(e.target.value)}
+                      disabled={isLocked}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="grid gap-3">
+                    <Label htmlFor="qdOfficial">QD Official</Label>
+                    <Textarea
+                      id="qdOfficial"
+                      placeholder="e.g., QD tasks completed, official updates"
+                      value={qdOfficial}
+                      onChange={(e) => setQdOfficial(e.target.value)}
+                      disabled={isLocked}
+                      rows={3}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Deadline: {deadlineText}</Label>
+                      <p className="text-xs text-muted-foreground">Submissions lock at 10:00 PM daily</p>
+                    </div>
+                  </div>
+
+                  <Button 
+                    onClick={isAuthenticated ? submitSubmission : handleSignIn} 
+                    disabled={submitting || (!isAuthenticated && !hasAnyContent) || (isAuthenticated && (!hasAnyContent || submissionStatus?.hasSubmitted || isPastDeadline)) || loading}
+                    className="w-full"
+                  >
+                    {isAuthenticated ? (
+                      submitting ? "Submitting..." : submissionStatus?.hasSubmitted ? "Already Submitted" : isPastDeadline ? "Submissions Closed" : "Submit Report"
+                    ) : (
+                      <>
+                        <LogIn className="h-4 w-4 mr-2" />
+                        Sign In to Submit
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Stats for submissions</CardTitle>
               <CardDescription>Track your participation</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-2 lg:grid-cols-2">
@@ -306,7 +308,7 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
-        )}
+        </div>
       </div>
     </TechShell>
   );
