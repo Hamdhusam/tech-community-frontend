@@ -3,7 +3,7 @@ import { customSession } from "better-auth/plugins";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
-import { hash, verify } from '@node-rs/argon2';
+import bcrypt from 'bcryptjs';
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -14,20 +14,10 @@ export const auth = betterAuth({
     enabled: true,
     password: {
       hash: async (password: string) => {
-        return await hash(password, {
-          memoryCost: 65536,
-          timeCost: 3,
-          parallelism: 4,
-          outputLen: 32,
-        });
+        return await bcrypt.hash(password, 12);
       },
       verify: async (hashedPassword: string, password: string) => {
-        return await verify(hashedPassword, password, {
-          memoryCost: 65536,
-          timeCost: 3,
-          parallelism: 4,
-          outputLen: 32,
-        });
+        return await bcrypt.compare(password, hashedPassword);
       },
     },
   },
