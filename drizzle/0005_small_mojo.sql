@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `user_date_unique` ON `votes` (`user_id`,`vote_date`);

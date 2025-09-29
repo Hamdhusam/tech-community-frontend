@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, unique } from 'drizzle-orm/sqlite-core';
 
 
 
@@ -13,6 +13,7 @@ export const user = sqliteTable("user", {
   image: text("image"),
   role: text("role").notNull().default("user"),
   strikes: integer("strikes").default(0).notNull(),
+  superAdmin: integer("super_admin", { mode: "boolean" }).default(false).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => new Date())
     .notNull(),
@@ -76,3 +77,14 @@ export const attendance = sqliteTable("attendance", {
   confirmedNotion: integer("confirmed_notion", { mode: "boolean" }).default(false).notNull(),
   notes: text("notes"),
 });
+
+export const votes = sqliteTable('votes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  voteDate: text('vote_date').notNull(), // YYYY-MM-DD format
+  vote: text('vote').notNull(), // The actual vote value
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => ({
+  userDateUnique: unique('user_date_unique').on(table.userId, table.voteDate),
+}));

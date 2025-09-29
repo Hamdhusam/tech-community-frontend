@@ -60,7 +60,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!isPending && (!session || session.user.role !== 'admin')) {
-      router.push('/dashboard');
+      toast.error('Unauthorized access to admin panel');
+      router.push('/');
       return;
     }
 

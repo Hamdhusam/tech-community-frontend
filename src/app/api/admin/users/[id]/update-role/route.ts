@@ -4,30 +4,38 @@ import { user } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 
+// SuperAdmin authentication helper
+async function requireSuperAdmin(request: NextRequest) {
+  try {
+    const session = await auth.api.getSession({ headers: request.headers });
+    
+    if (!session || !session.user || session.user.role !== 'admin') {
+      return null;
+    }
+    
+    // Get full user details to check superAdmin status
+    const fullUser = await db.select().from(user).where(eq(user.id, session.user.id)).limit(1);
+    
+    if (fullUser.length === 0 || !fullUser[0].superAdmin) {
+      return null;
+    }
+    
+    return session.user;
+  } catch (error) {
+    console.error('SuperAdmin auth error:', error);
+    return null;
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
-    // Authentication check - admin only
-    const session = await auth.api.getSession({ headers: request.headers });
-    if (!session) {
+    // Authentication check - superAdmin only for role updates
+    const superAdminUser = await requireSuperAdmin(request);
+    if (!superAdminUser) {
       return NextResponse.json({ 
-        error: 'Admin access required',
-        code: 'UNAUTHORIZED' 
-      }, { status: 401 });
-    }
-
-    // Verify requester role directly from DB to prevent session spoof/missing role
-    const requesterId = session.user.id;
-    const requester = await db
-      .select({ role: user.role })
-      .from(user)
-      .where(eq(user.id, requesterId))
-      .limit(1);
-    const requesterRole = requester[0]?.role;
-    if (requesterRole !== 'admin') {
-      return NextResponse.json({ 
-        error: 'Admin access required',
-        code: 'UNAUTHORIZED' 
-      }, { status: 401 });
+        error: 'Super admin access required for role updates',
+        code: 'SUPER_ADMIN_ACCESS_REQUIRED' 
+      }, { status: 403 });
     }
 
     // Extract user ID from URL
@@ -90,6 +98,8 @@ export async function PUT(request: NextRequest) {
         code: 'UPDATE_FAILED' 
       }, { status: 500 });
     }
+
+    console.log(`Super Admin ${superAdminUser.id} updated role for user ${userId} to ${role}`);
 
     return NextResponse.json(updatedUser[0]);
 

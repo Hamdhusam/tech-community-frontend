@@ -6,7 +6,7 @@ import { auth } from '@/lib/auth';
 import { hash } from '@node-rs/argon2';
 import { nanoid } from 'nanoid';
 
-// Admin authentication helper
+// Admin authentication helper with superAdmin check
 async function requireAdmin(request: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: request.headers });
@@ -18,6 +18,29 @@ async function requireAdmin(request: NextRequest) {
     return session.user;
   } catch (error) {
     console.error('Admin auth error:', error);
+    return null;
+  }
+}
+
+// SuperAdmin authentication helper
+async function requireSuperAdmin(request: NextRequest) {
+  try {
+    const session = await auth.api.getSession({ headers: request.headers });
+    
+    if (!session || !session.user || session.user.role !== 'admin') {
+      return null;
+    }
+    
+    // Get full user details to check superAdmin status
+    const fullUser = await db.select().from(user).where(eq(user.id, session.user.id)).limit(1);
+    
+    if (fullUser.length === 0 || !fullUser[0].superAdmin) {
+      return null;
+    }
+    
+    return session.user;
+  } catch (error) {
+    console.error('SuperAdmin auth error:', error);
     return null;
   }
 }
@@ -68,6 +91,7 @@ export async function GET(request: NextRequest) {
         image: user.image,
         role: user.role,
         strikes: user.strikes,
+        superAdmin: user.superAdmin,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         recentAttendanceCount: sql<number>`
@@ -137,19 +161,19 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST method - Create new user
+// POST method - Create new user (requires superAdmin)
 export async function POST(request: NextRequest) {
   try {
-    const adminUser = await requireAdmin(request);
-    if (!adminUser) {
+    const superAdminUser = await requireSuperAdmin(request);
+    if (!superAdminUser) {
       return NextResponse.json({ 
-        error: 'Admin authentication required',
-        code: 'ADMIN_ACCESS_REQUIRED' 
-      }, { status: 401 });
+        error: 'Super admin access required for user creation',
+        code: 'SUPER_ADMIN_ACCESS_REQUIRED' 
+      }, { status: 403 });
     }
 
     const requestBody = await request.json();
-    const { name, email, password, role } = requestBody;
+    const { name, email, password, role, superAdmin } = requestBody;
 
     // Validate required fields
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -213,6 +237,7 @@ export async function POST(request: NextRequest) {
       email: normalizedEmail,
       emailVerified: false,
       role,
+      superAdmin: superAdmin === true ? true : false,
       strikes: 0,
       createdAt: now,
       updatedAt: now
@@ -232,7 +257,7 @@ export async function POST(request: NextRequest) {
     // Return user without password
     const { ...userResponse } = newUser;
 
-    console.log(`Admin ${adminUser.id} created new user: ${userId} (${normalizedEmail})`);
+    console.log(`Super Admin ${superAdminUser.id} created new user: ${userId} (${normalizedEmail})`);
 
     return NextResponse.json(userResponse, { status: 201 });
 
@@ -245,7 +270,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT method - Update existing user
+// PUT method - Update existing user (superAdmin required for admin role changes)
 export async function PUT(request: NextRequest) {
   try {
     const adminUser = await requireAdmin(request);
@@ -267,7 +292,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const requestBody = await request.json();
-    const { name, email, password, role, emailVerified, strikes } = requestBody;
+    const { name, email, password, role, emailVerified, strikes, superAdmin } = requestBody;
 
     // Check if user exists
     const existingUser = await db
@@ -281,6 +306,18 @@ export async function PUT(request: NextRequest) {
         error: 'User not found',
         code: 'USER_NOT_FOUND' 
       }, { status: 404 });
+    }
+
+    // Check if trying to change admin role or superAdmin status - requires superAdmin
+    if ((role !== undefined && role !== existingUser[0].role) || 
+        (superAdmin !== undefined && superAdmin !== existingUser[0].superAdmin)) {
+      const superAdminUser = await requireSuperAdmin(request);
+      if (!superAdminUser) {
+        return NextResponse.json({ 
+          error: 'Super admin access required for role or superAdmin changes',
+          code: 'SUPER_ADMIN_ACCESS_REQUIRED' 
+        }, { status: 403 });
+      }
     }
 
     // Build update object
@@ -338,6 +375,17 @@ export async function PUT(request: NextRequest) {
         }, { status: 400 });
       }
       updates.role = role;
+    }
+
+    // Validate and set superAdmin
+    if (superAdmin !== undefined) {
+      if (typeof superAdmin !== 'boolean') {
+        return NextResponse.json({ 
+          error: 'superAdmin must be a boolean',
+          code: 'INVALID_SUPER_ADMIN' 
+        }, { status: 400 });
+      }
+      updates.superAdmin = superAdmin;
     }
 
     // Validate and set emailVerified
@@ -413,15 +461,15 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE method - Delete user
+// DELETE method - Delete user (requires superAdmin)
 export async function DELETE(request: NextRequest) {
   try {
-    const adminUser = await requireAdmin(request);
-    if (!adminUser) {
+    const superAdminUser = await requireSuperAdmin(request);
+    if (!superAdminUser) {
       return NextResponse.json({ 
-        error: 'Admin authentication required',
-        code: 'ADMIN_ACCESS_REQUIRED' 
-      }, { status: 401 });
+        error: 'Super admin access required for user deletion',
+        code: 'SUPER_ADMIN_ACCESS_REQUIRED' 
+      }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -448,10 +496,10 @@ export async function DELETE(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Prevent admin from deleting themselves
-    if (userId === adminUser.id) {
+    // Prevent superAdmin from deleting themselves
+    if (userId === superAdminUser.id) {
       return NextResponse.json({ 
-        error: 'Cannot delete your own admin account',
+        error: 'Cannot delete your own super admin account',
         code: 'CANNOT_DELETE_SELF' 
       }, { status: 400 });
     }
@@ -467,7 +515,7 @@ export async function DELETE(request: NextRequest) {
       .where(eq(user.id, userId))
       .returning();
 
-    console.log(`Admin ${adminUser.id} deleted user: ${userId} (${deletedUser.email})`);
+    console.log(`Super Admin ${superAdminUser.id} deleted user: ${userId} (${deletedUser.email})`);
 
     return NextResponse.json({
       message: 'User deleted successfully',
@@ -475,7 +523,8 @@ export async function DELETE(request: NextRequest) {
         id: deletedUser.id,
         name: deletedUser.name,
         email: deletedUser.email,
-        role: deletedUser.role
+        role: deletedUser.role,
+        superAdmin: deletedUser.superAdmin
       }
     });
 

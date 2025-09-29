@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
       const dbUser = await db.select({ role: user.role }).from(user).where(eq(user.id, session.user.id)).limit(1);
       const dbRole = dbUser[0]?.role;
       if (dbRole !== "admin") {
-        return NextResponse.redirect(new URL("/dashboard", request.url))
+        return NextResponse.redirect(new URL("/", request.url))
       }
     }
   }
