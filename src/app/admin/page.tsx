@@ -1,442 +1,229 @@
 "use client";
-import { useEffect, useState } from 'react';
-import { useSession } from '@/lib/auth-client';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Shield, User, Calendar, AlertCircle } from 'lucide-react';
-import TechShell from '@/components/TechShell';
-import { toast } from "sonner";
+import { useEffect, useMemo, useState } from "react";
+import TechShell from "@/components/TechShell";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Download, RefreshCcw, ShieldAlert, UserMinus, UserPlus } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 
-interface User {
-  id: string;
+// Mock admin dataset
+type AdminUser = {
+  id: number;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  year: "I" | "II" | "III" | "IV";
+  section: "A" | "B" | "C";
   strikes: number;
-  recentAttendanceCount: number;
-  createdAt: number;
-}
+  status: "active" | "suspended";
+};
 
-interface AttendanceRecord {
-  id: number;
-  userId: string;
-  submittedAt: number;
-  confirmedNotion: boolean;
-  notes?: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    strikes: number;
+const seedUsers: AdminUser[] = Array.from({ length: 24 }).map((_, i) => {
+  const years = ["I", "II", "III", "IV"] as const;
+  const sections = ["A", "B", "C"] as const;
+  return {
+    id: i + 1,
+    name: `Participant ${i + 1}`,
+    email: `student${i + 1}@college.edu`,
+    year: years[i % years.length],
+    section: sections[i % sections.length],
+    strikes: Math.floor(Math.random() * 11),
+    status: Math.random() > 0.15 ? "active" : "suspended",
   };
-}
+});
 
-export default function AdminDashboard() {
-  const { data: session, isPending } = useSession();
+export default function AdminPage() {
   const router = useRouter();
-  const [users, setUsers] = useState<User[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [newRole, setNewRole] = useState<'admin' | 'user'>('user');
-  const [newStrikes, setNewStrikes] = useState(0);
-  const [updating, setUpdating] = useState(false);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [addName, setAddName] = useState("");
-  const [addEmail, setAddEmail] = useState("");
-  const [addPassword, setAddPassword] = useState("");
-  const [addRole, setAddRole] = useState<'admin' | 'user'>("user");
-  const [creating, setCreating] = useState(false);
+  const { data: session, isPending } = useSession();
 
+  // Redirect non-admins away from admin panel
   useEffect(() => {
-    if (!isPending && (!session || session.user.role !== 'admin')) {
-      toast.error('Unauthorized access to admin panel');
-      router.push('/');
+    if (isPending) return;
+    if (!session?.user) {
+      router.push("/sign-in");
       return;
     }
-
-    fetchData();
+    // Only allow users with role === "admin"
+    if ((session.user as any)?.role !== "admin") {
+      router.push("/dashboard");
+    }
   }, [session, isPending, router]);
 
-  const fetchData = async () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('bearer_token') : null;
-    if (!token) {
-      toast.error('No auth token found. Please sign in again.');
-      router.push('/admin/sign-in?reason=missing_token');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const [usersRes, attendanceRes] = await Promise.all([
-        fetch('/api/admin/users', {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch('/api/admin/attendance', {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
-
-      if (!usersRes.ok || !attendanceRes.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
-      const usersData = await usersRes.json();
-      const attendanceData = await attendanceRes.json();
-
-      setUsers(usersData);
-      setAttendance(attendanceData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateRole = async (userId: string) => {
-    if (!selectedUser) return;
-    const token = localStorage.getItem('bearer_token');
-    setUpdating(true);
-    try {
-      const res = await fetch(`/api/admin/users/${userId}/update-role`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ role: newRole })
-      });
-
-      if (res.ok) {
-        // Update local state
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
-        setSelectedUser(null);
-        setNewRole('user');
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to update role');
-      }
-    } catch (err) {
-      toast.error('Error updating role');
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const updateStrikes = async (userId: string) => {
-    if (!selectedUser) return;
-    const token = localStorage.getItem('bearer_token');
-    setUpdating(true);
-    try {
-      const res = await fetch(`/api/admin/users/${userId}/update-strikes`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ strikes: newStrikes })
-      });
-
-      if (res.ok) {
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, strikes: newStrikes } : u));
-        setSelectedUser(null);
-        setNewStrikes(0);
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to update strikes');
-      }
-    } catch (err) {
-      toast.error('Error updating strikes');
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const createUser = async () => {
-    const token = localStorage.getItem('bearer_token');
-    if (!token) {
-      setError('No auth token found');
-      return;
-    }
-    setCreating(true);
-    try {
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: addName.trim(),
-          email: addEmail.trim().toLowerCase(),
-          password: addPassword,
-          role: addRole,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Failed to create user');
-        return;
-      }
-      setUsers((prev) => [data, ...prev]);
-      setShowAddDialog(false);
-      setAddName("");
-      setAddEmail("");
-      setAddPassword("");
-      setAddRole('user');
-    } catch (e) {
-      setError('Error creating user');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const openEdit = (user: User, type: 'role' | 'strikes') => {
-    setSelectedUser(user);
-    setNewRole(type === 'role' ? user.role : 'user');
-    setNewStrikes(type === 'strikes' ? user.strikes : 0);
-  };
-
-  if (isPending || loading) {
+  if (isPending) {
     return (
       <TechShell>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">Loading admin dashboard...</div>
-        </div>
+        <div className="p-6">Checking access…</div>
       </TechShell>
     );
   }
 
-  if (error) {
-    return (
-      <TechShell>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center text-destructive">Error: {error}</div>
-        </div>
-      </TechShell>
-    );
+  if (!session?.user || (session.user as any)?.role !== "admin") {
+    return null; // Redirecting – render nothing
   }
+
+  const [users, setUsers] = useState<AdminUser[]>(seedUsers);
+  const [query, setQuery] = useState("");
+  const [year, setYear] = useState("all-years");
+  const [section, setSection] = useState("all-sections");
+  const [status, setStatus] = useState("all-statuses");
+  const [sMin, setSMin] = useState("");
+  const [sMax, setSMax] = useState("");
+
+  const filtered = useMemo(() => {
+    return users.filter((u) => {
+      const q = query.trim().toLowerCase();
+      const matchesQ = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+      const matchesYear = year === "all-years" || u.year === (year as any);
+      const matchesSec = section === "all-sections" || u.section === (section as any);
+      const matchesStatus = status === "all-statuses" || u.status === (status as any);
+      const minOk = sMin === "" || u.strikes >= Number(sMin);
+      const maxOk = sMax === "" || u.strikes <= Number(sMax);
+      return matchesQ && matchesYear && matchesSec && matchesStatus && minOk && maxOk;
+    });
+  }, [users, query, year, section, status, sMin, sMax]);
+
+  const toggleSuspend = (id: number) => {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: u.status === "active" ? "suspended" : "active" } : u)));
+  };
+
+  const resetStrikes = (id: number) => {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, strikes: 0 } : u)));
+  };
+
+  const exportCSV = () => {
+    const headers = ["Name", "Email", "Year", "Section", "Strikes", "Status"];
+    const rows = filtered.map((u) => [u.name, u.email, u.year, u.section, String(u.strikes), u.status]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `users-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <TechShell>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-            <p className="text-muted-foreground">Manage users, attendance, and strikes</p>
-          </div>
-          <Button onClick={fetchData} variant="outline">
-            <AlertCircle className="mr-2 h-4 w-4" /> Refresh
-          </Button>
-        </div>
+      <div className="grid gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Admin Dashboard</CardTitle>
+            <CardDescription>Manage users, strikes, and statuses</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid sm:grid-cols-6 gap-3">
+              <div className="sm:col-span-2 space-y-1">
+                <Label>Search</Label>
+                <Input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="name or email" />
+              </div>
+              <div className="space-y-1">
+                <Label>Year</Label>
+                <Select value={year} onValueChange={setYear}>
+                  <SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-years">All Years</SelectItem>
+                    <SelectItem value="I">I</SelectItem>
+                    <SelectItem value="II">II</SelectItem>
+                    <SelectItem value="III">III</SelectItem>
+                    <SelectItem value="IV">IV</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Section</Label>
+                <Select value={section} onValueChange={setSection}>
+                  <SelectTrigger><SelectValue placeholder="Section"/></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-sections">All Sections</SelectItem>
+                    <SelectItem value="A">A</SelectItem>
+                    <SelectItem value="B">B</SelectItem>
+                    <SelectItem value="C">C</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger><SelectValue placeholder="Status"/></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-statuses">All Statuses</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Strike min</Label>
+                <Input inputMode="numeric" value={sMin} onChange={(e)=>setSMin(e.target.value)} placeholder="0" />
+              </div>
+              <div className="space-y-1">
+                <Label>Strike max</Label>
+                <Input inputMode="numeric" value={sMax} onChange={(e)=>setSMax(e.target.value)} placeholder="10" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={()=>{setQuery("");setYear("all-years");setSection("all-sections");setStatus("all-statuses");setSMin("");setSMax("");}}>
+                <RefreshCcw className="size-4 mr-2"/>Reset
+              </Button>
+              <Button onClick={exportCSV}><Download className="size-4 mr-2"/>Export CSV</Button>
+            </div>
+          </CardContent>
+        </Card>
 
-        <Tabs defaultValue="users" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="users">
-              <User className="mr-2 h-4 w-4" /> Users ({users.length})
-            </TabsTrigger>
-            <TabsTrigger value="attendance">
-              <Calendar className="mr-2 h-4 w-4" /> Attendance ({attendance.length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="users" className="mt-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle>User Management</CardTitle>
-                    <CardDescription>View and edit user roles and strikes</CardDescription>
-                  </div>
-                  <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-                    <DialogTrigger asChild>
-                      <Button size="sm">
-                        Add User
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add New User</DialogTitle>
-                        <DialogDescription>Create a new user or admin. Only admins can perform this action.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="add-name">Name</Label>
-                          <Input id="add-name" value={addName} onChange={(e)=>setAddName(e.target.value)} placeholder="Jane Doe" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="add-email">Email</Label>
-                          <Input id="add-email" type="email" value={addEmail} onChange={(e)=>setAddEmail(e.target.value)} placeholder="jane@example.com" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="add-password">Temporary Password</Label>
-                          <Input id="add-password" type="password" value={addPassword} onChange={(e)=>setAddPassword(e.target.value)} placeholder="Min 8 characters" autoComplete="off" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Role</Label>
-                          <Select value={addRole} onValueChange={(v)=>setAddRole(v as 'admin' | 'user')}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="user">User</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={createUser} disabled={creating || !addName || !addEmail || !addPassword}>
-                          {creating ? 'Creating...' : 'Create User'}
+        <Card>
+          <CardHeader>
+            <CardTitle>Participants</CardTitle>
+            <CardDescription>Actions: suspend/reactivate, reset strikes</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Year</TableHead>
+                    <TableHead>Section</TableHead>
+                    <TableHead>Strikes</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((u)=> (
+                    <TableRow key={u.id}>
+                      <TableCell>{u.name}</TableCell>
+                      <TableCell className="whitespace-nowrap">{u.email}</TableCell>
+                      <TableCell>{u.year}</TableCell>
+                      <TableCell>{u.section}</TableCell>
+                      <TableCell>{u.strikes}</TableCell>
+                      <TableCell className={u.status === "active" ? "text-green-400" : "text-destructive"}>{u.status}</TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button size="sm" variant="outline" onClick={()=>resetStrikes(u.id)} title="Reset strikes">
+                          <ShieldAlert className="size-4"/>
                         </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Strikes</TableHead>
-                      <TableHead>Recent Attendance (30d)</TableHead>
-                      <TableHead>Actions</TableHead>
+                        {u.status === "active" ? (
+                          <Button size="sm" variant="destructive" onClick={()=>toggleSuspend(u.id)}>
+                            <UserMinus className="size-4 mr-1"/>Suspend
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="default" onClick={()=>toggleSuspend(u.id)}>
+                            <UserPlus className="size-4 mr-1"/>Reactivate
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>
-                          <Badge variant={user.role === 'admin' ? 'secondary' : 'default'}>
-                            {user.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{user.strikes}</TableCell>
-                        <TableCell>{user.recentAttendanceCount}</TableCell>
-                        <TableCell className="space-x-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" onClick={() => openEdit(user, 'role')}>
-                                Edit Role
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Edit Role for {selectedUser?.name}</DialogTitle>
-                                <DialogDescription>Change the user role</DialogDescription>
-                              </DialogHeader>
-                              <div className="grid gap-4 py-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="role">Role</Label>
-                                  <Select value={newRole} onValueChange={(v) => setNewRole(v as 'admin' | 'user')}>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="user">User</SelectItem>
-                                      <SelectItem value="admin">Admin</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <DialogFooter>
-                                <Button type="submit" onClick={() => updateRole(user.id)} disabled={updating}>
-                                  {updating ? 'Updating...' : 'Update Role'}
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" onClick={() => openEdit(user, 'strikes')}>
-                                Edit Strikes
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Edit Strikes for {selectedUser?.name}</DialogTitle>
-                                <DialogDescription>Change the number of strikes</DialogDescription>
-                              </DialogHeader>
-                              <div className="grid gap-4 py-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="strikes">Strikes</Label>
-                                  <Input
-                                    id="strikes"
-                                    type="number"
-                                    min="0"
-                                    value={newStrikes}
-                                    onChange={(e) => setNewStrikes(parseInt(e.target.value) || 0)}
-                                    className="w-full"
-                                  />
-                                </div>
-                              </div>
-                              <DialogFooter>
-                                <Button type="submit" onClick={() => updateStrikes(user.id)} disabled={updating}>
-                                  {updating ? 'Updating...' : 'Update Strikes'}
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="attendance" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Attendance Oversight</CardTitle>
-                <CardDescription>View all attendance submissions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Submitted At</TableHead>
-                      <TableHead>Notion Confirmed</TableHead>
-                      <TableHead>Notes</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attendance.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">{record.user.name}</TableCell>
-                        <TableCell>{new Date(record.submittedAt).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant={record.confirmedNotion ? 'default' : 'secondary'}>
-                            {record.confirmedNotion ? 'Yes' : 'No'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{record.notes}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </TechShell>
   );

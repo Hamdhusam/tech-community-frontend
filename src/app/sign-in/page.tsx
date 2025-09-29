@@ -11,9 +11,6 @@ import TechShell from "@/components/TechShell";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { Shield, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
 
 function RegisteredBanner() {
   const params = useSearchParams();
@@ -27,7 +24,6 @@ function RegisteredBanner() {
 export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
 
@@ -35,33 +31,24 @@ export default function SignInPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const sanitizedEmail = email.trim().toLowerCase();
-      const sanitizedPassword = password.trim();
-      const { data, error } = await authClient.signIn.email({
-        email: sanitizedEmail,
-        password: sanitizedPassword,
+      const res = await authClient.signIn.email({
+        email,
+        password,
         rememberMe: remember,
         callbackURL: "/dashboard",
       });
-      if (error?.code) {
-        toast.error("Invalid email or password. Please make sure you have already registered an account and try again.");
+      if (res.error) {
+        alert("Invalid email or password");
         return;
       }
-      // Set bearer token after successful login
-      if (data?.session?.token) {
-        localStorage.setItem("bearer_token", data.session.token);
-      }
-      // Use full reload for proper session propagation to middleware
       window.location.href = "/dashboard";
-    } catch (err) {
-      toast.error("Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogle = async () => {
-    toast.info("Google OAuth not configured yet. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then enable provider.");
+    alert("Google OAuth not configured yet. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then enable provider.");
   };
 
   return (
@@ -83,28 +70,7 @@ export default function SignInPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input 
-                    id="password" 
-                    type={showPassword ? "text" : "password"} 
-                    autoComplete="current-password" 
-                    value={password} 
-                    onChange={(e)=>setPassword(e.target.value)} 
-                    required 
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
+                <Input id="password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required />
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <label className="inline-flex items-center gap-2 select-none">
@@ -120,7 +86,7 @@ export default function SignInPage() {
               <Shield className="size-4 mr-2" /> Continue with Google
             </Button>
             <p className="mt-4 text-xs text-muted-foreground">
-              Need admin access? <Link href="/admin/sign-in" className="text-[oklch(0.696_0.17_240)] hover:underline">Admin login</Link>
+              Don&apos;t have an account? <Link href="/sign-up" className="text-[oklch(0.696_0.17_240)] hover:underline">Create one</Link>
             </p>
           </CardContent>
         </Card>

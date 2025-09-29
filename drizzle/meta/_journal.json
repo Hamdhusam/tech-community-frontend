@@ -8,62 +8,6 @@
       "when": 1758774984250,
       "tag": "0000_material_black_tarantula",
       "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1758783814398,
-      "tag": "0001_orange_christian_walker",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1758784185741,
-      "tag": "0002_overconfident_dreaming_celestial",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1759120055413,
-      "tag": "0003_marvelous_supreme_intelligence",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1759120081015,
-      "tag": "0004_colorful_matthew_murdock",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1759120448987,
-      "tag": "0005_small_mojo",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1759126861905,
-      "tag": "0006_demonic_infant_terrible",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1759126881671,
-      "tag": "0007_aspiring_carmella_unuscione",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "6",
-      "when": 1759127794319,
-      "tag": "0008_high_ben_urich",
-      "breakpoints": true
     }
   ]
 }

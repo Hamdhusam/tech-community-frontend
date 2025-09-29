@@ -17,11 +17,8 @@ export default function TechShell({ children }: PropsWithChildren) {
   const nav = [
     { href: "/dashboard", label: "Dashboard", icon: Timer },
     { href: "/visualizations", label: "Visualizations", icon: PieChart },
+    { href: "/admin", label: "Admin", icon: Shield },
   ];
-
-  if (session?.user?.role === 'admin') {
-    nav.push({ href: "/admin", label: "Admin", icon: Shield });
-  }
 
   const signOut = async () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem("bearer_token") : "";

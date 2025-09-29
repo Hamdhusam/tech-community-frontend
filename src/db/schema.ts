@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, unique } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
 
 
 
@@ -11,9 +11,6 @@ export const user = sqliteTable("user", {
     .$defaultFn(() => false)
     .notNull(),
   image: text("image"),
-  role: text("role").notNull().default("user"),
-  strikes: integer("strikes").default(0).notNull(),
-  superAdmin: integer("super_admin", { mode: "boolean" }).default(false).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => new Date())
     .notNull(),
@@ -69,36 +66,3 @@ export const verification = sqliteTable("verification", {
     () => new Date(),
   ),
 });
-
-export const attendance = sqliteTable("attendance", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  submittedAt: integer("submitted_at", { mode: "timestamp" }).notNull(),
-  confirmedNotion: integer("confirmed_notion", { mode: "boolean" }).default(false).notNull(),
-  notes: text("notes"),
-});
-
-export const votes = sqliteTable('votes', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
-  voteDate: text('vote_date').notNull(), // YYYY-MM-DD format
-  vote: text('vote').notNull(), // The actual vote value
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-}, (table) => ({
-  userDateUnique: unique('user_date_unique').on(table.userId, table.voteDate),
-}));
-
-export const submissions = sqliteTable('submissions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
-  submissionDate: text('submission_date').notNull().$defaultFn(() => new Date().toISOString().split('T')[0]), // YYYY-MM-DD format
-  date: text('date').notNull().$defaultFn(() => new Date().toISOString().split('T')[0]), // YYYY-MM-DD format
-  attendanceClass: text('attendance_class'),
-  fileAcademics: text('file_academics'),
-  qdOfficial: text('qd_official'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
-}, (table) => ({
-  submissionUserDateUnique: unique('submission_user_date_unique').on(table.userId, table.submissionDate),
-}));

@@ -19,10 +19,10 @@ export default function HomePage() {
             </p>
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg" className="bg-[var(--chart-1)] hover:bg-[var(--chart-1)/.9]">
-                <Link href="/sign-in">Sign in</Link>
+                <Link href="/sign-up">Get started</Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="/admin/sign-in">Admin Login</Link>
+                <Link href="/sign-in">Sign in</Link>
               </Button>
               <Button asChild variant="ghost">
                 <Link href="/visualizations">See trends</Link>

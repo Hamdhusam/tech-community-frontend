@@ -9,45 +9,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import TechShell from "@/components/TechShell";
 import { Sparkles } from "lucide-react";
-import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const register = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    if (password !== confirmPassword) {
-      toast.error("Passwords don't match.");
-      setLoading(false);
-      return;
-    }
     try {
-      const sanitizedEmail = email.trim().toLowerCase();
-      const { error } = await authClient.signUp.email({ 
-        email: sanitizedEmail, 
-        name: name.trim(), 
-        password: password.trim() 
-      });
+      const { error } = await authClient.signUp.email({ email, name, password });
       if (error?.code) {
-        const errorMap = {
-          USER_ALREADY_EXISTS: "Email already registered",
-        };
-        toast.error(errorMap[error.code] || error.message || "Registration failed");
+        alert(error.code);
         return;
       }
-      toast.success("Account created! Please check your email to verify.");
       router.push("/sign-in?registered=true");
-    } catch (err) {
-      toast.error("Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -73,53 +52,7 @@ export default function SignUpPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input 
-                    id="password" 
-                    type={showPassword ? "text" : "password"} 
-                    autoComplete="new-password" 
-                    value={password} 
-                    onChange={(e)=>setPassword(e.target.value)} 
-                    required 
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="confirm-password">Confirm Password</Label>
-                <div className="relative">
-                  <Input 
-                    id="confirm-password" 
-                    type={showConfirmPassword ? "text" : "password"} 
-                    autoComplete="new-password" 
-                    value={confirmPassword} 
-                    onChange={(e)=>setConfirmPassword(e.target.value)} 
-                    required 
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
+                <Input id="password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required />
               </div>
               <Button type="submit" disabled={loading} className="w-full">{loading? "Creating...":"Create account"}</Button>
             </form>
