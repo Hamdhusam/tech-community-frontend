@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Shield, User, Calendar, AlertCircle } from 'lucide-react';
 import TechShell from '@/components/TechShell';
+import { toast } from "sonner";
 
 interface User {
   id: string;
@@ -69,7 +70,8 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('bearer_token') : null;
     if (!token) {
-      setError('No auth token found');
+      toast.error('No auth token found. Please sign in again.');
+      router.push('/admin/sign-in?reason=missing_token');
       setLoading(false);
       return;
     }
@@ -122,10 +124,10 @@ export default function AdminDashboard() {
         setNewRole('user');
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to update role');
+        toast.error(data.error || 'Failed to update role');
       }
     } catch (err) {
-      alert('Error updating role');
+      toast.error('Error updating role');
     } finally {
       setUpdating(false);
     }
@@ -151,10 +153,10 @@ export default function AdminDashboard() {
         setNewStrikes(0);
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to update strikes');
+        toast.error(data.error || 'Failed to update strikes');
       }
     } catch (err) {
-      alert('Error updating strikes');
+      toast.error('Error updating strikes');
     } finally {
       setUpdating(false);
     }
