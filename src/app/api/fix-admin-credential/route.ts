@@ -1,98 +1,115 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { user, account } from '@/db/schema';
+import { user, account, session as sessionSchema } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { hash } from '@node-rs/argon2';
+import { hash, verify } from '@node-rs/argon2';
 import { nanoid } from 'nanoid';
 
 const ADMIN_EMAIL = 'archanaarchu200604@gmail.com';
 const ADMIN_PASSWORD = 'archanaarchu2006';
+const ADMIN_NAME = 'Super Admin';
 const ADMIN_ROLE = 'admin';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('Starting admin credential fix...');
+    console.log('Starting manual admin setup...');
 
-    // Hash the password with exact auth.ts params
+    // Hash password consistently
     const hashedPassword = await hash(ADMIN_PASSWORD, {
       memoryCost: 65536,
       timeCost: 3,
       parallelism: 4,
       outputLen: 32,
     });
-    console.log('Password hashed successfully');
 
     // Find or create user
     let existingUser = await db.query.user.findFirst({
       where: eq(user.email, ADMIN_EMAIL),
     });
 
+    let userId: string;
     if (!existingUser) {
-      // Create user if not exists
       const newUserId = nanoid();
-      const createdUser = await db.insert(user).values({
+      const [createdUser] = await db.insert(user).values({
         id: newUserId,
-        name: 'Admin User',
+        name: ADMIN_NAME,
         email: ADMIN_EMAIL,
         emailVerified: true,
         role: ADMIN_ROLE,
         strikes: 0,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        superAdmin: true,
+        createdAt: new Date().getTime(),
+        updatedAt: new Date().getTime(),
       }).returning();
-      existingUser = createdUser[0];
-      console.log('Created new user:', existingUser.id);
+      existingUser = createdUser;
+      userId = newUserId;
+      console.log('Created super admin user:', userId);
     } else {
-      // Update role if needed
-      if (existingUser.role !== ADMIN_ROLE) {
-        await db.update(user).set({ role: ADMIN_ROLE }).where(eq(user.id, existingUser.id));
-        console.log('Updated user role to admin');
+      userId = existingUser.id;
+      // Update if needed
+      if (existingUser.role !== ADMIN_ROLE || !existingUser.superAdmin) {
+        await db.update(user).set({ 
+          role: ADMIN_ROLE, 
+          superAdmin: true,
+          updatedAt: new Date().getTime(),
+        }).where(eq(user.id, userId));
+        console.log('Updated user to super admin');
       }
     }
 
-    const userId = existingUser.id;
+    // Clear existing sessions and credentials for this user
+    await db.delete(sessionSchema).where(eq(sessionSchema.userId, userId));
+    await db.delete(account).where(eq(account.userId, userId));
+    console.log('Cleared old sessions and credentials');
 
-    // Remove any existing credential for this user/email
-    await db.delete(account).where(
-      eq(account.userId, userId)
-    );
-    console.log('Cleared existing credentials');
-
-    // Insert new credential
+    // Insert credential
     const credentialId = nanoid();
     await db.insert(account).values({
       id: credentialId,
-      accountId: ADMIN_EMAIL,  // For credential provider, accountId is the email
+      accountId: ADMIN_EMAIL,
       providerId: 'credential',
       userId: userId,
       password: hashedPassword,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date().getTime(),
+      updatedAt: new Date().getTime(),
     });
-    console.log('Inserted new credential for admin');
+    console.log('Inserted admin credential');
 
-    // Verify insertion
-    const verifyCredential = await db.query.account.findFirst({
-      where: eq(account.providerId, 'credential'),
-      columns: {
-        id: true,
-        accountId: true,
-        providerId: true,
-        userId: true,
-        password: true,  // Just for log, don't expose
-      },
+    // Verify password works
+    const cred = await db.query.account.findFirst({
+      where: and(eq(account.userId, userId), eq(account.providerId, 'credential')),
     });
-    console.log('Verified credential inserted:', {
-      ...verifyCredential,
-      password: '***HIDDEN***',
-    });
+    if (cred && await verify(cred.password!, ADMIN_PASSWORD, { memoryCost: 65536, timeCost: 3, parallelism: 4, outputLen: 32 })) {
+      console.log('Password verification confirmed');
+    } else {
+      throw new Error('Password verification failed');
+    }
 
-    console.log('Admin credential fix completed successfully!');
-    // Return JSON success instead of redirect so client fetch can handle it reliably
-    return NextResponse.json({ ok: true, userId });
+    // Create session manually
+    const sessionId = nanoid();
+    const sessionToken = nanoid(43); // Better-auth tokens are 43 chars
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).getTime(); // 30 days
+
+    await db.insert(sessionSchema).values({
+      id: sessionId,
+      token: sessionToken,
+      expiresAt: Math.floor(expiresAt / 1000),
+      userId: userId,
+      createdAt: new Date().getTime(),
+      updatedAt: new Date().getTime(),
+      // Optional: ipAddress, userAgent from request if needed
+    });
+    console.log('Created admin session:', sessionToken.substring(0, 10) + '...');
+
+    return NextResponse.json({ 
+      ok: true, 
+      userId,
+      sessionToken,
+      success: 'Admin account prepared and signed in server-side'
+    });
 
   } catch (error: any) {
-    console.error('Admin credential fix failed:', error);
-    return NextResponse.json({ error: 'Fix failed', details: error?.message ?? 'Unknown error' }, { status: 500 });
+    console.error('Manual admin setup failed:', error);
+    return NextResponse.json({ error: 'Setup failed', details: error.message }, { status: 500 });
   }
 }

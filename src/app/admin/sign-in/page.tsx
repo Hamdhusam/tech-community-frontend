@@ -68,44 +68,29 @@ export default function AdminSignInPage() {
       setLoading(true);
       toast.info("Preparing admin account...");
       const res = await fetch("/api/fix-admin-credential", { cache: "no-store" });
-      // Handle JSON success response (ok: true) or HTTP ok
-      let isSuccess = res.ok;
-      try {
-        const data = await res.json();
-        if (data?.ok) {
-          isSuccess = true;
-        } else if (data?.error) {
-          toast.error(`Failed to prepare admin account: ${data.error}`);
-          return;
-        }
-      } catch (_) {
-        // no JSON body (e.g., empty) – rely on HTTP status
-      }
-      if (!isSuccess) {
-        toast.error("Failed to prepare admin account");
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast.error(`Failed to prepare: ${data.error || 'Unknown error'}`);
         return;
       }
+
+      // Use the returned session token directly
+      if (data.sessionToken) {
+        localStorage.setItem("bearer_token", data.sessionToken);
+        toast.success("Admin account created and signed in! Redirecting...");
+        window.location.href = "/admin";
+        return;
+      }
+
+      // Fallback: prefill if no token
       const adminEmail = "archanaarchu200604@gmail.com";
       const adminPassword = "archanaarchu2006";
       setEmail(adminEmail);
       setPassword(adminPassword);
+      toast.warning("Credentials prepared—click 'Admin Sign In' to log in manually.");
 
-      const { data, error } = await authClient.signIn.email({
-        email: adminEmail,
-        password: adminPassword,
-        rememberMe: true,
-        callbackURL: "/admin",
-      });
-      if (error?.code) {
-        toast.error("Admin sign-in failed. Try manually with prefilled credentials.");
-        return;
-      }
-      if (data?.session?.token) {
-        localStorage.setItem("bearer_token", data.session.token);
-      }
-      window.location.href = "/admin";
-    } catch (_) {
-      toast.error("Quick admin setup failed.");
+    } catch (err: any) {
+      toast.error(`Quick setup failed: ${err.message}`);
     } finally {
       setLoading(false);
     }

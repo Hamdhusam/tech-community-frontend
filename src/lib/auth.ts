@@ -43,19 +43,8 @@ export const auth = betterAuth({
         type: "string",
         required: false,
         defaultValue: "user",
-        returned: true,  // Include role in session response
+        returned: true,
       },
     },
   },
-  plugins: [
-    customSession(async ({ user, session }) => {
-      return {
-        session,  // Return session object directly (don't spread)
-        user: {
-          ...user,
-          role: user.role || "user",  // Ensure role is included
-        },
-      };
-    }),
-  ],
 });
