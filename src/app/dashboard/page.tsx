@@ -5,13 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { useCountdown } from "@/lib/hooks/useCountdown";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertCircle, Clock } from "lucide-react";
+import { AlertCircle, Clock, LogIn } from "lucide-react";
+import Link from "next/link";
 
 const VOTE_OPTIONS = [
   { value: "yes", label: "Yes" },
@@ -34,6 +33,7 @@ export default function DashboardPage() {
   const [voteStatus, setVoteStatus] = useState<VoteStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [strikes, setStrikes] = useState<number>(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Deadline: 10:00 PM (22:00) today
   const now = new Date();
@@ -41,24 +41,26 @@ export default function DashboardPage() {
   const deadlineText = today.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }); // "10:00 PM"
 
   const isPastDeadline = now >= today;
-  const isMidnightPassed = false; // Reset handled by date check in API
 
   useEffect(() => {
     if (sessionPending) return;
 
-    if (!session?.user) {
-      router.push("/sign-in?redirect=/dashboard");
-      return;
-    }
+    setIsAuthenticated(!!session?.user);
 
-    // Load strikes from local or API if needed
-    const raw = localStorage.getItem("flexie_state");
-    if (raw) {
-      const data = JSON.parse(raw);
-      setStrikes(data.strikes || 0);
-    }
+    if (session?.user) {
+      // Load strikes from local or API if needed
+      const raw = localStorage.getItem("flexie_state");
+      if (raw) {
+        const data = JSON.parse(raw);
+        setStrikes(data.strikes || 0);
+      }
 
-    fetchVoteStatus();
+      fetchVoteStatus();
+    } else {
+      // For unauth: set status to prompt sign-in, no API call
+      setVoteStatus({ hasVoted: false, vote: null, message: "Sign in to vote" });
+      setLoading(false);
+    }
   }, [sessionPending, session, router]);
 
   const fetchVoteStatus = async () => {
@@ -75,6 +77,7 @@ export default function DashboardPage() {
       if (!res.ok) {
         if (res.status === 401) {
           toast.error("Please sign in to vote.");
+          setVoteStatus({ hasVoted: false, vote: null, message: "Session expired. Please sign in again." });
           return;
         }
         throw new Error("Failed to check vote status");
@@ -85,12 +88,23 @@ export default function DashboardPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       toast.error("Error checking vote status");
+      setVoteStatus({ hasVoted: false, vote: null, message: "Error checking status. Please try again." });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSignIn = () => {
+    router.push("/sign-in?redirect=/dashboard");
+  };
+
   const submitVote = async () => {
+    if (!isAuthenticated) {
+      toast.error("Please sign in to vote.");
+      handleSignIn();
+      return;
+    }
+
     if (!choice) {
       toast.error("Please select a vote option");
       return;
@@ -143,6 +157,7 @@ export default function DashboardPage() {
   const getStatusMessage = () => {
     if (loading) return "Loading...";
     if (error) return `Error: ${error}`;
+    if (!isAuthenticated) return "Sign in to vote";
     if (voteStatus?.hasVoted) return "You have already voted today";
     if (isPastDeadline) return "Voting closed for today, come back tomorrow";
     return "Ready to vote";
@@ -157,6 +172,8 @@ export default function DashboardPage() {
       </TechShell>
     );
   }
+
+  const isLocked = !isAuthenticated || voteStatus?.hasVoted || isPastDeadline;
 
   return (
     <TechShell>
@@ -196,16 +213,16 @@ export default function DashboardPage() {
               <>
                 <div className="grid gap-3">
                   <Label>Vote Option</Label>
-                  <RadioGroup value={choice} onValueChange={setChoice} disabled={voteStatus?.hasVoted || isPastDeadline} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <RadioGroup value={choice} onValueChange={setChoice} disabled={isLocked} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {VOTE_OPTIONS.map((option) => (
                       <label key={option.value} className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer ${
-                        (voteStatus?.hasVoted || isPastDeadline) 
+                        isLocked 
                           ? 'opacity-50 cursor-not-allowed' 
                           : choice === option.value 
                             ? "bg-foreground/10 border-foreground/30"
                             : "hover:bg-foreground/5"
                       }`}>
-                        <RadioGroupItem value={option.value} id={option.value} disabled={voteStatus?.hasVoted || isPastDeadline} />
+                        <RadioGroupItem value={option.value} id={option.value} disabled={isLocked} />
                         <span>{option.label}</span>
                       </label>
                     ))}
@@ -222,27 +239,36 @@ export default function DashboardPage() {
                 </div>
 
                 <Button 
-                  onClick={submitVote} 
-                  disabled={submitting || !choice || voteStatus?.hasVoted || isPastDeadline || loading}
+                  onClick={isAuthenticated ? submitVote : handleSignIn} 
+                  disabled={submitting || (!isAuthenticated && !choice) || (isAuthenticated && (!choice || voteStatus?.hasVoted || isPastDeadline)) || loading}
                   className="w-full"
                 >
-                  {submitting ? "Submitting..." : voteStatus?.hasVoted ? "Already Voted" : isPastDeadline ? "Voting Closed" : "Submit Vote"}
+                  {isAuthenticated ? (
+                    submitting ? "Submitting..." : voteStatus?.hasVoted ? "Already Voted" : isPastDeadline ? "Voting Closed" : "Submit Vote"
+                  ) : (
+                    <>
+                      <LogIn className="h-4 w-4 mr-2" />
+                      Sign In to Vote
+                    </>
+                  )}
                 </Button>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Strikes</CardTitle>
-            <CardDescription>Track your compliance history</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-5xl font-bold tracking-tight">{strikes}</div>
-            <p className="text-xs text-muted-foreground mt-2">Monitor your daily voting participation</p>
-          </CardContent>
-        </Card>
+        {isAuthenticated && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Strikes</CardTitle>
+              <CardDescription>Track your compliance history</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-5xl font-bold tracking-tight">{strikes}</div>
+              <p className="text-xs text-muted-foreground mt-2">Monitor your daily voting participation</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </TechShell>
   );

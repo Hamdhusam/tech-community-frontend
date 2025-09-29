@@ -42,5 +42,5 @@ export async function middleware(request: NextRequest) {
  
 export const config = {
   runtime: "nodejs",
-  matcher: ["/dashboard", "/visualizations", "/admin/:path*"], // Updated to match all /admin sub-routes
+  matcher: ["/admin/:path*"],
 };
