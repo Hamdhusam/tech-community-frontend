@@ -72,7 +72,8 @@ export default function DashboardPage() {
     alert("Submission saved locally for demo.");
   };
 
-  const deadlineText = overdue ? "Too Late" : `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  const h12 = hours % 12 === 0 ? 12 : hours % 12;
+  const deadlineText = overdue ? "Too Late" : `${h12}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 
   return (
     <TechShell>
