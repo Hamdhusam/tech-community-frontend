@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ModeToggle } from "./theme/ModeToggle";
-import { LogOut, Menu, PieChart, Shield, Sparkles, Timer, User } from "lucide-react";
+import { LogOut, Menu, PieChart, Shield, Timer, User } from "lucide-react";
 import { useSession, authClient } from "@/lib/auth-client";
 
 export default function TechShell({ children }: PropsWithChildren) {
@@ -44,7 +44,7 @@ export default function TechShell({ children }: PropsWithChildren) {
               <Menu className="size-5" />
             </button>
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-              <Sparkles className="size-5 text-[oklch(0.696_0.17_240)]" />
+              <img src="https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/document-uploads/image-1759730933070.png" alt="Flexie logo" className="size-5 object-contain" />
               <span>Flexie</span>
               <span className="text-xs text-muted-foreground hidden sm:inline">Tech Community</span>
             </Link>
