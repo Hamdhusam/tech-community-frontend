@@ -23,7 +23,7 @@ type Submission = {
 };
 
 export default function DashboardPage() {
-  const { hours, minutes, seconds, overdue } = useCountdown(22, 0);
+  const { hours, minutes, seconds, overdue } = useCountdown(22, 0, "Asia/Kolkata", { rollToNextDay: false });
   const [choice, setChoice] = useState<string>("");
   const [notion, setNotion] = useState<boolean>(false);
   const [strikes, setStrikes] = useState<number>(0);
@@ -72,7 +72,14 @@ export default function DashboardPage() {
     alert("Submission saved locally for demo.");
   };
 
-  const deadlineText = overdue ? "Too Late" : "10:00 PM";
+  const countdownText = useMemo(() => {
+    if (overdue) return "Deadline Reached!";
+    const h12 = (hours % 12) || 12;
+    const mm = String(minutes).padStart(2, "0");
+    const ss = String(seconds).padStart(2, "0");
+    // Target is 10:00 PM IST, so suffix is PM
+    return `${h12}:${mm}:${ss} PM`;
+  }, [hours, minutes, seconds, overdue]);
 
   return (
     <TechShell>
@@ -104,7 +111,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">Deadline</div>
-              <div className={`font-mono ${overdue?"text-destructive":"text-[oklch(0.646_0.222_240)]"}`}>{deadlineText}</div>
+              <div className={`font-mono ${overdue?"text-destructive":"text-[oklch(0.646_0.222_240)]"}`}>{countdownText}</div>
             </div>
             <Button onClick={submit} disabled={overdue || todaySubmitted} className="w-full">
               {todaySubmitted ? "Already submitted" : overdue ? "Locked" : "Submit"}
