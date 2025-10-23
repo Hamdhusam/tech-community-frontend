@@ -6,6 +6,7 @@
         "dev": "next dev --turbopack",
         "build": "next build",
         "start": "next start",
+        "db:create-supabase-tables": "node scripts/run_sql.js src/db/supabase_create_tables.sql",
         "lint": "next lint"
     },
     "dependencies": {
@@ -98,7 +99,9 @@
         "three": "^0.178.0",
         "three-globe": "^2.43.0",
         "vaul": "^1.1.2",
-        "zod": "^4.1.8"
+        "zod": "^4.1.8",
+        "pg": "^8.11.0",
+        "dotenv": "^16.3.1"
     },
     "devDependencies": {
         "@eslint/eslintrc": "^3.3.1",
