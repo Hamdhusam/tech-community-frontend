@@ -11,61 +11,29 @@ import { Download, RefreshCcw, ShieldAlert, UserMinus, UserPlus } from "lucide-r
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
-// Mock admin dataset
+// Real admin dataset from database
 type AdminUser = {
-  id: number;
-  name: string;
+  user_id: string;
+  full_name: string;
   email: string;
-  year: "I" | "II" | "III" | "IV";
+  year_of_study: "I" | "II" | "III" | "IV";
   section: "A" | "B" | "C";
+  branch: string;
+  student_id: string;
+  phone_number: string;
   strikes: number;
   status: "active" | "suspended";
+  role: "participant" | "class_incharge" | "administrator";
+  created_at: string;
 };
-
-const seedUsers: AdminUser[] = Array.from({ length: 24 }).map((_, i) => {
-  const years = ["I", "II", "III", "IV"] as const;
-  const sections = ["A", "B", "C"] as const;
-  return {
-    id: i + 1,
-    name: `Participant ${i + 1}`,
-    email: `student${i + 1}@college.edu`,
-    year: years[i % years.length],
-    section: sections[i % sections.length],
-    strikes: Math.floor(Math.random() * 11),
-    status: Math.random() > 0.15 ? "active" : "suspended",
-  };
-});
 
 export default function AdminPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
-
-  // Redirect non-admins away from admin panel
-  useEffect(() => {
-    if (isPending) return;
-    if (!session?.user) {
-      router.push("/sign-in");
-      return;
-    }
-    // Only allow users with role === "admin"
-    if ((session.user as any)?.role !== "admin") {
-      router.push("/dashboard");
-    }
-  }, [session, isPending, router]);
-
-  if (isPending) {
-    return (
-      <TechShell>
-        <div className="p-6">Checking access…</div>
-      </TechShell>
-    );
-  }
-
-  if (!session?.user || (session.user as any)?.role !== "admin") {
-    return null; // Redirecting – render nothing
-  }
-
-  const [users, setUsers] = useState<AdminUser[]>(seedUsers);
+  
+  // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [year, setYear] = useState("all-years");
   const [section, setSection] = useState("all-sections");
@@ -76,8 +44,8 @@ export default function AdminPage() {
   const filtered = useMemo(() => {
     return users.filter((u) => {
       const q = query.trim().toLowerCase();
-      const matchesQ = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
-      const matchesYear = year === "all-years" || u.year === (year as any);
+      const matchesQ = !q || u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.student_id.toLowerCase().includes(q);
+      const matchesYear = year === "all-years" || u.year_of_study === (year as any);
       const matchesSec = section === "all-sections" || u.section === (section as any);
       const matchesStatus = status === "all-statuses" || u.status === (status as any);
       const minOk = sMin === "" || u.strikes >= Number(sMin);
@@ -86,23 +54,117 @@ export default function AdminPage() {
     });
   }, [users, query, year, section, status, sMin, sMax]);
 
-  const toggleSuspend = (id: number) => {
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: u.status === "active" ? "suspended" : "active" } : u)));
+  // Fetch real users from database
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/admin/users');
+        if (response.ok) {
+          const data = await response.json();
+          setUsers(data.users || []);
+        } else {
+          console.error('Failed to fetch users');
+        }
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Only fetch if we have a valid admin session
+    const userRole = (session?.user as any)?.app_metadata?.role || (session?.user as any)?.role;
+    if (session?.user && (userRole === "administrator" || userRole === "admin")) {
+      fetchUsers();
+    }
+  }, [session]);
+
+  // Redirect non-admins away from admin panel
+  useEffect(() => {
+    if (isPending) return;
+    if (!session?.user) {
+      router.push("/sign-in");
+      return;
+    }
+    // Only allow users with role === "administrator" or "admin"
+    const userRole = (session.user as any)?.app_metadata?.role || (session.user as any)?.role;
+    if (userRole !== "administrator" && userRole !== "admin") {
+      router.push("/dashboard");
+    }
+  }, [session, isPending, router]);
+
+  // NOW we can do conditional rendering
+  if (isPending) {
+    return (
+      <TechShell>
+        <div className="p-6">Checking access…</div>
+      </TechShell>
+    );
+  }
+
+  const userRole = (session?.user as any)?.app_metadata?.role || (session?.user as any)?.role;
+  if (!session?.user || (userRole !== "administrator" && userRole !== "admin")) {
+    return null; // Redirecting – render nothing
+  }
+
+  const toggleSuspend = async (userId: string) => {
+    const user = users.find(u => u.user_id === userId);
+    if (!user) return;
+    
+    const newStatus = user.status === "active" ? "suspended" : "active";
+    
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, status: newStatus }),
+      });
+      
+      if (response.ok) {
+        setUsers((prev) => prev.map((u) => (u.user_id === userId ? { ...u, status: newStatus } : u)));
+      }
+    } catch (error) {
+      console.error('Failed to update status:', error);
+    }
   };
 
-  const resetStrikes = (id: number) => {
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, strikes: 0 } : u)));
+  const resetStrikes = async (userId: string) => {
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, strikes: 0 }),
+      });
+      
+      if (response.ok) {
+        setUsers((prev) => prev.map((u) => (u.user_id === userId ? { ...u, strikes: 0 } : u)));
+      }
+    } catch (error) {
+      console.error('Failed to reset strikes:', error);
+    }
   };
 
   const exportCSV = () => {
-    const headers = ["Name", "Email", "Year", "Section", "Strikes", "Status"];
-    const rows = filtered.map((u) => [u.name, u.email, u.year, u.section, String(u.strikes), u.status]);
+    const headers = ["Name", "Email", "Student ID", "Year", "Section", "Branch", "Phone", "Strikes", "Status", "Role"];
+    const rows = filtered.map((u) => [
+      u.full_name, 
+      u.email, 
+      u.student_id, 
+      u.year_of_study, 
+      u.section, 
+      u.branch, 
+      u.phone_number, 
+      String(u.strikes), 
+      u.status, 
+      u.role
+    ]);
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `users-${Date.now()}.csv`;
+    a.download = `flex-academics-users-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -181,47 +243,66 @@ export default function AdminPage() {
             <CardDescription>Actions: suspend/reactivate, reset strikes</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Year</TableHead>
-                    <TableHead>Section</TableHead>
-                    <TableHead>Strikes</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((u)=> (
-                    <TableRow key={u.id}>
-                      <TableCell>{u.name}</TableCell>
-                      <TableCell className="whitespace-nowrap">{u.email}</TableCell>
-                      <TableCell>{u.year}</TableCell>
-                      <TableCell>{u.section}</TableCell>
-                      <TableCell>{u.strikes}</TableCell>
-                      <TableCell className={u.status === "active" ? "text-green-400" : "text-destructive"}>{u.status}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button size="sm" variant="outline" onClick={()=>resetStrikes(u.id)} title="Reset strikes">
-                          <ShieldAlert className="size-4"/>
-                        </Button>
-                        {u.status === "active" ? (
-                          <Button size="sm" variant="destructive" onClick={()=>toggleSuspend(u.id)}>
-                            <UserMinus className="size-4 mr-1"/>Suspend
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="default" onClick={()=>toggleSuspend(u.id)}>
-                            <UserPlus className="size-4 mr-1"/>Reactivate
-                          </Button>
-                        )}
-                      </TableCell>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <span className="ml-3">Loading participants...</span>
+              </div>
+            ) : users.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No participants found. Students will appear here after they register.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Student ID</TableHead>
+                      <TableHead>Year</TableHead>
+                      <TableHead>Section</TableHead>
+                      <TableHead>Branch</TableHead>
+                      <TableHead>Strikes</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((u)=> (
+                      <TableRow key={u.user_id}>
+                        <TableCell className="font-medium">{u.full_name}</TableCell>
+                        <TableCell className="whitespace-nowrap">{u.email}</TableCell>
+                        <TableCell>{u.student_id}</TableCell>
+                        <TableCell>{u.year_of_study}</TableCell>
+                        <TableCell>{u.section}</TableCell>
+                        <TableCell className="whitespace-nowrap">{u.branch}</TableCell>
+                        <TableCell>
+                          <span className={u.strikes >= 3 ? "text-destructive font-bold" : ""}>{u.strikes}</span>
+                        </TableCell>
+                        <TableCell className={u.status === "active" ? "text-green-400" : "text-destructive"}>
+                          {u.status}
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                          <Button size="sm" variant="outline" onClick={()=>resetStrikes(u.user_id)} title="Reset strikes">
+                            <ShieldAlert className="size-4"/>
+                          </Button>
+                          {u.status === "active" ? (
+                            <Button size="sm" variant="destructive" onClick={()=>toggleSuspend(u.user_id)}>
+                              <UserMinus className="size-4 mr-1"/>Suspend
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="default" onClick={()=>toggleSuspend(u.user_id)}>
+                              <UserPlus className="size-4 mr-1"/>Reactivate
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
