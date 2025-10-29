@@ -44,6 +44,7 @@
         "@radix-ui/react-tooltip": "^1.2.7",
         "@react-three/drei": "^10.4.4",
         "@react-three/fiber": "^9.0.0-alpha.8",
+        "@supabase/supabase-js": "^2.76.1",
         "@tabler/icons-react": "^3.35.0",
         "@tailwindcss/typography": "^0.5.16",
         "@tsparticles/engine": "^3.8.1",
@@ -59,6 +60,7 @@
         "cmdk": "^1.1.1",
         "cobe": "^0.6.4",
         "date-fns": "^4.1.0",
+        "dotenv": "^16.3.1",
         "dotted-map": "^2.2.3",
         "drizzle-kit": "^0.31.4",
         "drizzle-orm": "^0.44.5",
@@ -74,6 +76,7 @@
         "motion-dom": "^12.23.12",
         "next": "15.3.5",
         "next-themes": "^0.4.6",
+        "pg": "^8.11.0",
         "qss": "^3.0.0",
         "react": "^19.0.0",
         "react-chartjs-2": "^5.3.0",
@@ -99,9 +102,7 @@
         "three": "^0.178.0",
         "three-globe": "^2.43.0",
         "vaul": "^1.1.2",
-        "zod": "^4.1.8",
-        "pg": "^8.11.0",
-        "dotenv": "^16.3.1"
+        "zod": "^4.1.8"
     },
     "devDependencies": {
         "@eslint/eslintrc": "^3.3.1",
