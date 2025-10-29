@@ -34,6 +34,7 @@ export default function AdminPage() {
   // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [year, setYear] = useState("all-years");
   const [section, setSection] = useState("all-sections");
@@ -53,6 +54,27 @@ export default function AdminPage() {
       return matchesQ && matchesYear && matchesSec && matchesStatus && minOk && maxOk;
     });
   }, [users, query, year, section, status, sMin, sMax]);
+
+  // Fetch current user's role from database
+  useEffect(() => {
+    const fetchCurrentUserRole = async () => {
+      if (!session?.user?.id) return;
+      
+      try {
+        const response = await fetch('/api/user/profile');
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentUserRole(data.role);
+        }
+      } catch (error) {
+        console.error('Error fetching user role:', error);
+      }
+    };
+
+    if (session?.user) {
+      fetchCurrentUserRole();
+    }
+  }, [session]);
 
   // Fetch real users from database
   useEffect(() => {
@@ -74,11 +96,10 @@ export default function AdminPage() {
     };
 
     // Only fetch if we have a valid admin session
-    const userRole = (session?.user as any)?.app_metadata?.role || (session?.user as any)?.role;
-    if (session?.user && (userRole === "administrator" || userRole === "admin")) {
+    if (session?.user && currentUserRole === "administrator") {
       fetchUsers();
     }
-  }, [session]);
+  }, [session, currentUserRole]);
 
   // Redirect non-admins away from admin panel
   useEffect(() => {
@@ -87,15 +108,14 @@ export default function AdminPage() {
       router.push("/sign-in");
       return;
     }
-    // Only allow users with role === "administrator" or "admin"
-    const userRole = (session.user as any)?.app_metadata?.role || (session.user as any)?.role;
-    if (userRole !== "administrator" && userRole !== "admin") {
+    // Only allow users with role === "administrator"
+    if (currentUserRole !== null && currentUserRole !== "administrator") {
       router.push("/dashboard");
     }
-  }, [session, isPending, router]);
+  }, [session, isPending, currentUserRole, router]);
 
   // NOW we can do conditional rendering
-  if (isPending) {
+  if (isPending || currentUserRole === null) {
     return (
       <TechShell>
         <div className="p-6">Checking access…</div>
@@ -103,10 +123,11 @@ export default function AdminPage() {
     );
   }
 
-  const userRole = (session?.user as any)?.app_metadata?.role || (session?.user as any)?.role;
-  if (!session?.user || (userRole !== "administrator" && userRole !== "admin")) {
+  if (!session?.user || currentUserRole !== "administrator") {
     return null; // Redirecting – render nothing
   }
+  // Expose the current admin's role for use in the UI (e.g. to show in a "Role" column or for conditional rendering)
+  const adminRole = currentUserRole;
 
   const toggleSuspend = async (userId: string) => {
     const user = users.find(u => u.user_id === userId);

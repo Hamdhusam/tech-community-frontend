@@ -1,36 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { headers } from 'next/headers';
 
-// Helper to verify admin role
+// Helper to verify admin role from student_profiles table
 async function verifyAdmin(request: NextRequest) {
-  const accessToken = request.cookies.get('sb-access-token')?.value;
-  
-  if (!accessToken) {
-    return { isAdmin: false, error: 'No authentication token' };
+  try {
+    // Get the access token from cookies
+    const accessToken = request.cookies.get('sb-access-token')?.value;
+    
+    if (!accessToken) {
+      return { isAdmin: false, error: 'No access token', userId: null };
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return { isAdmin: false, error: 'Supabase not configured', userId: null };
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verify the user with the access token
+    const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
+    
+    if (userError || !user) {
+      return { 
+        isAdmin: false, 
+        error: 'Invalid or expired token', 
+        userId: null 
+      };
+    }
+
+    const userId = user.id;
+
+    // Query student_profiles table for user's role
+    const { data: profile, error } = await supabase
+      .from('student_profiles')
+      .select('role, full_name, email')
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !profile) {
+      return { 
+        isAdmin: false, 
+        error: 'Profile not found or database error', 
+        userId 
+      };
+    }
+
+    // Check if user has administrator role
+    if (profile.role !== 'administrator') {
+      return { 
+        isAdmin: false, 
+        error: 'Insufficient permissions', 
+        userId,
+        userEmail: profile.email,
+        userName: profile.full_name 
+      };
+    }
+
+    return { 
+      isAdmin: true, 
+      userId,
+      userEmail: profile.email,
+      userName: profile.full_name
+    };
+  } catch (error) {
+    console.error('Error in verifyAdmin:', error);
+    return { isAdmin: false, error: 'Authentication error', userId: null };
   }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return { isAdmin: false, error: 'Supabase not configured' };
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
-  
-  const { data: { user }, error } = await supabase.auth.getUser(accessToken);
-  
-  if (error || !user) {
-    return { isAdmin: false, error: 'Invalid token' };
-  }
-
-  const role = (user as any)?.app_metadata?.role || (user as any)?.user_metadata?.role;
-  
-  if (role !== 'administrator' && role !== 'admin') {
-    return { isAdmin: false, error: 'Insufficient permissions', user };
-  }
-
-  return { isAdmin: true, user };
 }
 
 export async function GET(request: NextRequest) {
@@ -79,8 +118,9 @@ export async function GET(request: NextRequest) {
 
     // 🔒 AUDIT LOG: Record admin access
     console.log('✅ Admin data access', {
-      admin_id: authResult.user?.id,
-      admin_email: authResult.user?.email,
+      admin_id: authResult.userId,
+      admin_email: authResult.userEmail,
+      admin_name: authResult.userName,
       action: 'VIEW_ALL_USERS',
       record_count: usersWithDefaults.length,
       timestamp: new Date().toISOString()
@@ -155,8 +195,9 @@ export async function PATCH(request: NextRequest) {
 
     // 🔒 AUDIT LOG: Record admin modification
     console.log('✅ Admin user modification', {
-      admin_id: authResult.user?.id,
-      admin_email: authResult.user?.email,
+      admin_id: authResult.userId,
+      admin_email: authResult.userEmail,
+      admin_name: authResult.userName,
       target_user_id: user_id,
       action: 'UPDATE_USER',
       changes: updates,
